@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 
-from SIAM.datasets import SUNAttributesDataset, SoNDataset, ToTensor, Rescale, RandomCrop, VerticalFlip, my_collate, \
+from datasets import SUNAttributesDataset, SoNDataset, ToTensor, Rescale, RandomCrop, VerticalFlip, my_collate, \
     Rotate, NetSUNTop, NetSoNTop
 
 gpu_no = 0  # Set to False for cpu-version
@@ -25,9 +25,15 @@ out_net_name = 'last_model_finetuned.pt'
 init_net_folder = 'models'
 init_net_name = None
 
+# Data paths
+SoN_dir = "../../../data/datasets/SoN/"
+SUN_dir = "../../../data/datasets/SUNAttributes/"
 
-data_path_son = '/home/diego/Downloads/Datasets/SoN/'
-image_folders = ['images1','images2','images3','images4','images5','images6']
+# Images are downloaded and stored in a folder numbered 1-10
+# The votes.tsv file contains URIs which can be used to download the images
+# Because of license constraints we cannot re-upload these images, so the user has to dowload them separately
+
+image_folders = [str(num) for num in range(1,11)]
 #warm_start = False
 epochs_only_sun = 0
 epochs_only_son = 0
@@ -49,11 +55,13 @@ if not os.path.exists(net_folder):
 im_paths = []
 son_avg = []
 son_var = []
-with open(os.path.join(data_path_son,'SoN_Votes.csv'), 'r') as csvfile:
-     SoN_reader = csv.reader(csvfile, delimiter=',')
+SoN_imgs_path = os.path.join(SoN_dir, 'images')
+with open(os.path.join(SoN_dir,'votes.tsv'), 'r') as csvfile:
+     SoN_reader = csv.reader(csvfile, delimiter='\t')
+     next(SoN_reader) # Skip header
      for row in SoN_reader:
          for image_folder in image_folders:
-             im_path = os.path.join(data_path_son,image_folder,row[0]+'.jpg')
+             im_path = os.path.join(SoN_imgs_path, image_folder, row[0]+'.jpg')
              if os.path.isfile(im_path):
                 im_paths.append(im_path)
                 son_avg.append(np.float32(row[3]))
@@ -79,17 +87,16 @@ dataloader_son_val = DataLoader(dataset_son_val, batch_size=10,shuffle=False,num
 dataloader_son_test = DataLoader(dataset_son_test, batch_size=10,shuffle=False,num_workers=4,collate_fn=my_collate)
 
 
-# Read images and labels of SUN Attributes dataset
-data_path = '/home/diego/Downloads/Datasets/SUN/SUNAttributeDB/'
+
 # Get the attribute names
-temp = scipy.io.loadmat(data_path+'attributes2.mat')
+temp = scipy.io.loadmat('attributes2.mat')
 attr_names = [m[0][0] for m in temp['attributes']]
 # get the labels and the image names
-temp = scipy.io.loadmat(data_path+'attributeLabels_continuous2.mat')
+temp = scipy.io.loadmat('attributeLabels_continuous2.mat')
 labels = temp['labels_cv']
-temp = scipy.io.loadmat(data_path+'trainval_idx.mat')
+temp = scipy.io.loadmat(SUN_dir+'trainval_idx.mat')
 trainval_split = temp['sets']
-temp = scipy.io.loadmat(data_path+'images.mat')
+temp = scipy.io.loadmat(SUN_dir+'images.mat')
 im_names = [m[0][0] for m in temp['images']]
 # Split in train-val-test (80-10-10)
 train_indeces = np.where(trainval_split==0)[0].astype(int)
@@ -105,9 +112,9 @@ im_names_test = [im_names[i] for i in test_indeces]
 
 composed = transforms.Compose([Rescale((500,500)),Rotate(5),RandomCrop(450),VerticalFlip(),ToTensor()])
 
-dataset_sun_train = SUNAttributesDataset(data_path,im_names_train,labels_train,attr_names,tr=composed)
-dataset_sun_val = SUNAttributesDataset(data_path,im_names_val,labels_val,attr_names,tr=composed)
-dataset_sun_test = SUNAttributesDataset(data_path,im_names_test,labels_test,attr_names,tr=composed)
+dataset_sun_train = SUNAttributesDataset(SUN_dir, im_names_train,labels_train,attr_names,tr=composed)
+dataset_sun_val = SUNAttributesDataset(SUN_dir, im_names_val,labels_val,attr_names,tr=composed)
+dataset_sun_test = SUNAttributesDataset(SUN_dir, im_names_test,labels_test,attr_names,tr=composed)
 
 dataloader_sun_train = DataLoader(dataset_sun_train, batch_size=10,shuffle=True,num_workers=4)
 dataloader_sun_val = DataLoader(dataset_sun_val, batch_size=10,shuffle=False,num_workers=4)
