@@ -1,41 +1,36 @@
-import scipy.io
-from skimage import transform
-import os
-import csv
 import numpy as np
+import torch
+import scipy.io
+
+from matplotlib.colors import LinearSegmentedColormap
+from skimage import transform
+import torch.nn as nn
 from torchvision import transforms
 import torchvision.models as models
-from SIAM.utils import SUNAttributesDataset, SoNDataset, ToTensor, Rescale, NetSUNSoNTopBase,NetSUNTop, NetSoNTop
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
-import torch.nn as nn
-import torch
-from matplotlib.colors import LinearSegmentedColormap
 
+from SIAM.models import NetSUNSoNTopBase,NetSUNTop, NetSoNTop
+from SIAM.custom_transforms import ToTensor, Rescale
+from SIAM.datasets import SUNAttributesDataset, SoNDataset
+from SIAM.utils import load_SoN_images
 
+# ToDo: son_baseline is not added
 
 gpu_no = 0  # Set to False for cpu-version
 net_folder = 'models'
-net_name = 'sunson_siam.pt'
+net_file = 'sun_son/last_model_finetuned.pt'
 net_folder2 = 'models'
-net_name2 = 'son_baseline.pt'
+net_file2 = 'sun_son/son_baseline.pt'
 only_most_active = True
 
+# Paths
+SoN_dir = "../../../data/datasets/SoN/"
+SUN_dir = "../../../data/datasets/SUNAttributes/"
+
 # SoN dataset
-data_path_son = '[...]/Datasets/SoN/'
-image_folders = ['images1','images2','images3','images4','images5','images6']
-im_paths = []
-son_avg = []
-son_var = []
-with open(os.path.join(data_path_son,'SoN_Votes.csv'), 'r') as csvfile:
-     SoN_reader = csv.reader(csvfile, delimiter=',')
-     for row in SoN_reader:
-         for image_folder in image_folders:
-             im_path = os.path.join(data_path_son,image_folder,row[0]+'.jpg')
-             if os.path.isfile(im_path):
-                im_paths.append(im_path)
-                son_avg.append(np.float32(row[3]))
-                son_var.append(np.float32(row[4]))
+image_folders = [str(num) for num in range(1,11)]
+im_paths, son_avg, son_var = load_SoN_images(SoN_dir, image_folders)
 
 labels_son = np.array([son_avg,son_var]).transpose()
 
@@ -57,16 +52,15 @@ dataloader_son_test = DataLoader(dataset_son_test, batch_size=1,shuffle=False,nu
 
 
 # SUN Attributes
-data_path = '[...]/Datasets/SUN/SUNAttributeDB/'
 # Get the attribute names
-temp = scipy.io.loadmat(data_path+'attributes2.mat')
+temp = scipy.io.loadmat('attributes2.mat')
 attr_names = [m[0][0] for m in temp['attributes']]
 # get the labels and the image names
-temp = scipy.io.loadmat(data_path+'attributeLabels_continuous2.mat')
+temp = scipy.io.loadmat(SUN_dir+'attributeLabels_continuous2.mat')
 labels = temp['labels_cv']
-temp = scipy.io.loadmat(data_path+'trainval_idx.mat')
+temp = scipy.io.loadmat(SUN_dir+'trainval_idx.mat')
 trainval_split = temp['sets']
-temp = scipy.io.loadmat(data_path+'images.mat')
+temp = scipy.io.loadmat(SUN_dir+'images.mat')
 im_names = [m[0][0] for m in temp['images']]
 # Split in train-val-test (80-10-10)
 train_indeces = np.where(trainval_split==0)[0].astype(int)
@@ -87,36 +81,31 @@ else:
 
 composed = transforms.Compose([Rescale(500),ToTensor()])
 
-dataset_sun_train = SUNAttributesDataset(data_path,im_names_train,labels_train,attr_names,tr=composed)
-dataset_sun_val = SUNAttributesDataset(data_path,im_names_val,labels_val,attr_names,tr=composed)
-dataset_sun_test = SUNAttributesDataset(data_path,im_names_test,labels_test,attr_names,tr=composed)
+dataset_sun_train = SUNAttributesDataset(SUN_dir,im_names_train,labels_train,attr_names,tr=composed)
+dataset_sun_val = SUNAttributesDataset(SUN_dir,im_names_val,labels_val,attr_names,tr=composed)
+dataset_sun_test = SUNAttributesDataset(SUN_dir,im_names_test,labels_test,attr_names,tr=composed)
 
 dataloader_sun_train = DataLoader(dataset_sun_train, batch_size=1,shuffle=False,num_workers=1)
 dataloader_sun_val = DataLoader(dataset_sun_val, batch_size=1,shuffle=False,num_workers=1)
 dataloader_sun_test = DataLoader(dataset_sun_test, batch_size=1,shuffle=False,num_workers=1)
 #inspect_dataset(dataset,attr_names)
 
-
-
 basenet = models.resnet50(pretrained=True)
 basenet2 = models.resnet50(pretrained=True)
-
-
-
 
 #net(tr(sample)['image'].unsqueeze(0))
 
 
 # Our model
 net = nn.Sequential(*list(basenet.children())[:-2], NetSUNTop(), NetSoNTop(dataset_son_train.label_avg)).to(device)
-net.load_state_dict(torch.load(os.path.join(net_folder,net_name)))
+net.load_state_dict(torch.load(net_file))
 for param in net.parameters():
     param.requires_grad = False
 net.eval()
 
 #Baseline
 net2 = nn.Sequential(*list(basenet2.children())[:-1],NetSUNSoNTopBase()).to(device)
-net2.load_state_dict(torch.load(os.path.join(net_folder2,net_name2)))
+net2.load_state_dict(torch.load(net_file2))
 net2.eval()
 basenet2 = nn.Sequential(*list(net2.children())[:-2]).to(device)
 contrib = net2[-1].conv_son.weight.data[0,:].squeeze().cpu().numpy()
@@ -135,8 +124,6 @@ for i in range(len(attr_names)):
     template = all_templates[map_idx[0],0,:,:]*this_contrib[0] + all_templates[map_idx[1],0,:,:]*this_contrib[1]
     templates[i,:,:] = template
 
-
-#vis = visdom.Visdom()
 nrows = 2
 if only_most_active:
     ncols=8

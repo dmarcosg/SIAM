@@ -11,8 +11,10 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 
-from datasets import SUNAttributesDataset, SoNDataset, ToTensor, Rescale, RandomCrop, VerticalFlip, my_collate, \
-    Rotate, NetSUNTop, NetSoNTop
+from SIAM.datasets import SUNAttributesDataset, SoNDataset, my_collate
+from SIAM.custom_transforms import ToTensor, Rescale, RandomCrop, VerticalFlip, Rotate
+from SIAM.models import NetSUNTop, NetSoNTop
+from SIAM.utils import load_SoN_images
 
 gpu_no = 0  # Set to False for cpu-version
 freeze_basenet = True
@@ -32,8 +34,8 @@ SUN_dir = "../../../data/datasets/SUNAttributes/"
 # Images are downloaded and stored in a folder numbered 1-10
 # The votes.tsv file contains URIs which can be used to download the images
 # Because of license constraints we cannot re-upload these images, so the user has to dowload them separately
-
 image_folders = [str(num) for num in range(1,11)]
+
 #warm_start = False
 epochs_only_sun = 0
 epochs_only_son = 0
@@ -51,22 +53,7 @@ if not os.path.exists(net_folder):
     os.mkdir(net_folder)
 
 # Read images and labels of ScenicOrNot (SoN) dataset
-
-im_paths = []
-son_avg = []
-son_var = []
-SoN_imgs_path = os.path.join(SoN_dir, 'images')
-with open(os.path.join(SoN_dir,'votes.tsv'), 'r') as csvfile:
-     SoN_reader = csv.reader(csvfile, delimiter='\t')
-     next(SoN_reader) # Skip header
-     for row in SoN_reader:
-         for image_folder in image_folders:
-             im_path = os.path.join(SoN_imgs_path, image_folder, row[0]+'.jpg')
-             if os.path.isfile(im_path):
-                im_paths.append(im_path)
-                son_avg.append(np.float32(row[3]))
-                son_var.append(np.float32(row[4]))
-
+im_paths, son_avg, son_var = load_SoN_images(SoN_dir, image_folders)
 labels_son = np.array([son_avg,son_var]).transpose()
 
 # Build train-val-test sets
@@ -85,8 +72,6 @@ dataset_son_test = SoNDataset(im_paths_son_test,labels_son_test,['Average','Vari
 dataloader_son_train = DataLoader(dataset_son_train, batch_size=10,shuffle=True,num_workers=4,collate_fn=my_collate)
 dataloader_son_val = DataLoader(dataset_son_val, batch_size=10,shuffle=False,num_workers=4,collate_fn=my_collate)
 dataloader_son_test = DataLoader(dataset_son_test, batch_size=10,shuffle=False,num_workers=4,collate_fn=my_collate)
-
-
 
 # Get the attribute names
 temp = scipy.io.loadmat('attributes2.mat')
