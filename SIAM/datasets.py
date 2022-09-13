@@ -1,10 +1,8 @@
-from skimage import io, transform
+from skimage import io
 import os
 import numpy as np
-import torch
 from torch.utils.data import Dataset
 from torch.utils.data.dataloader import default_collate
-import matplotlib.pyplot as plt
 
 class SoNDataset(Dataset):
     """SoN scenicness dataset."""
