@@ -1,21 +1,15 @@
 import scipy.io
-from scipy.misc import imsave
 from skimage import transform
 import os
 import csv
 import numpy as np
-from torchvision import transforms, utils
+from torchvision import transforms
 import torchvision.models as models
-from utils_siam import SUNAttributesDataset, SoNDataset, show_image, inspect_dataset, ToTensor, Rescale, RandomCrop, VerticalFlip, NetSUNSoNTopBase,NetSUNTop, NetSoNTop
+from SIAM.utils import SUNAttributesDataset, SoNDataset, ToTensor, Rescale, NetSUNSoNTopBase,NetSUNTop, NetSoNTop
 import matplotlib.pyplot as plt
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 import torch
-from tqdm import tqdm
-import visdom
-from matplotlib.gridspec import GridSpec
 from matplotlib.colors import LinearSegmentedColormap
 
 
